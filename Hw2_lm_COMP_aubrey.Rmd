@@ -1,0 +1,211 @@
+---
+title: "STOR 565 Fall 2022 Homework 2"
+author: "Aubrey Wang"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+subtitle: \textbf{Due on 09/02/2022}
+header-includes: \usepackage{amsgen,amsmath,amstext,amsbsy,amsopn,amssymb,mathabx,amsthm,bm,bbm}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+## install.packages("ISLR")   # if you don't have this package, run it
+library("ISLR")
+library(MASS)
+```
+\theoremstyle{definition}
+\newtheorem*{hint}{Hint}
+
+\theoremstyle{remark}
+\newtheorem*{rmk}{Remark}
+
+*Remark.* This homework aims to help you go through the necessary preliminary material from linear regression. Credits for **Theoretical Part** and **Computational Part** are in total 110 pt. At most 100 pt can be earned for this homework. For **Computational Part**, please complete your answer in the **RMarkdown** file and submit your printed PDF homework created using **RMarkdown**.
+
+## Computational Part
+
+1. (*25 pt*) Consider the dataset "Boston" in predicting the crime rate at Boston with associated covariates.
+```{r Boston}
+head(Boston)
+```
+Suppose you would like to predict the crime rate with explantory variables
+
+* `age`   - Proportion of owner-occupied units built prior to 1940
+* `dis`   - Weighted mean of distances to employement centers
+* `rad`   - Index of accessibility to radial highways
+
+Run with the linear model
+```{r lm}
+mod1 <- lm(crim ~ age + dis + rad, data = Boston)
+summary(mod1)
+```
+Answer the following questions.
+
+a. What do the following quantities that appear in the above output mean in the linear model? Provide a brief description.
+    + `t value` and `Pr(>|t|)` of `rad`
+    
+    **Answer:** 
+   The meaning of t value: The t-value is a way to quantify the difference between the population means. 
+   The meaning of Pr(>|t|): The p-value for the predictor variable rad is <2e-16 . Since this value is less than .05, it has a statistically significant relationship with the response variable in the model.
+   t-value measures the statistical significance of that predictor "rad" to the linear model.
+   H_0: beta_rad = 0, which means predictor "rad" is not significant;
+   H_a: beta_rad is not equal to 0, which means predictor "rad" is significant to the model. As the p-value for rad is <2e-16, so we reject the the null hypothesis, which means that predictor "rad" is statistical significant to the model.
+&nbsp;
+&nbsp;
+
+    + `Adjusted R-squared` 
+    
+    **Answer:** 
+    Adjusted R2 is a corrected goodness-of-fit (model accuracy) measure for linear models. Adjusted R^2 penalized for the complexity. Compared to Multiple R^2, Adjusted R^2 don't have to increase it the predictors increase, but Multiple R^2 must increase if we add predictors.
+&nbsp;
+&nbsp;
+    
+    + `F-statistic`, `DF` and corresponding `p-value`
+
+    **Answer:** An F statistic is a value you get when you run an ANOVA test or a regression analysis to find out if the means between two populations are significantly different. 
+                The F-value column is the test statistic from the F test. This is the mean square of each independent variable divided by the mean square of the residuals. The larger the F value, the more likely it is that the variation caused by the independent variable is real and not due to chance. 
+                Null Hypothesis: H0: beta_1 = beta_2 = beta_3
+                H_a: at least one of beta_i is not equal to 0
+                DF is the degree of freedom, and it is equal to total number of observations minus the number of coefficients, here df = n-p-1 = 502.F-Statistics is also used to test the significance of regression coefficient in the linear model.
+                In this dataset, F-statistic = 110.9 is larger than p-value, so we can reject the null hypothesis and conclude that there is a significant relationship between the predictors to the response variable.
+&nbsp;
+&nbsp;
+    
+b. Are the following sentences True or False? Briefly justify your answer.
+
+    + `age` is not a significant predictor of crim, and we can drop it from the model.
+    
+    **Answer:** TRUE. I think "age" is not a significent predictor of crim, as the o-value for "age" is 0.406, which is larger than 0.05, which means that it is not statistic significant.
+&nbsp;
+&nbsp;
+    
+    + Both `Multiple R-squared` and `Adjusted R-squared` increase with number of variables since they take into account all the variables and more variance is explained as the model becomes more complicated when the number of variables increases. 
+    
+    **Answer:** FALSE. If we increase the number of variables, only multiple R-squared will increase, and the adjusted R-squared will depends. The adjusted R-squared increases when the new term improves the model more than would be expected by chance. It decreases when a predictor improves the model by less than expected.  
+&nbsp;
+&nbsp;
+    
+    + `rad` has a positive effect on the response.
+    
+    **Answer:** TRUE. I agree that "rad" has a positive effect on the response. As the p-value of "rad" is <2e-16, which is smaller than 0.05, which means that it is statistic significant. Besides, the estimate of "rad" is 0.56750, which means that it will have a positive effect on the response.
+&nbsp; 
+&nbsp;
+    
+    + Our model residuals appear to be normally distributed.
+    
+    \begin{hint}
+      You need to access to the model residuals in justifying the last sentence. The following commands might help.
+    \end{hint}
+    ```{r, eval = FALSE}
+    # Obtain the residuals
+    res1 <- residuals(mod1)
+    
+    # Normal QQ-plot of residuals
+    plot(mod1, 2)
+    
+    # Conduct a Normality test via Shapiro-Wilk and Kolmogorov-Smirnov test
+    shapiro.test(res1)
+    ks.test(res1, "pnorm")
+    ```
+
+    **Answer:** 
+    FALSE. A residual plot shows the difference between the observed response and the fitted response values.As we can see in the QQ-plot, the theoretical quantiles between (-3,2) generally fitted the residual plot, but there are some outliers between(2,3)
+    
+    As for the Shapiro-Wilk normality test, the null-hypothesis of this test is that the population is normally distributed. Thus, if the p value is less than the chosen alpha level, then the null hypothesis is rejected and there is evidence that the data tested are not normally distributed. In this output, the p-value for Shapiro-Wilk normality test is 2.2e-16, which is pretty smail, so we can rejected the null hypothesis, which means that it is not normally distributed.
+    
+    As for the Asymptotic one-sample Kolmogorov-Smirnov test, the null-hypothesis of this test is that the population is normally distributed. Thus, if the p value is less than the chosen alpha level, then the null hypothesis is rejected and there is evidence that the data tested are not normally distributed. In this output, the p-value for Asymptotic one-sample Kolmogorov-Smirnov test is 2.2e-16, which is pretty smail, so we can rejected the null hypothesis, which means that it is not normally distributed.
+&nbsp;
+&nbsp;
+    
+    
+2. (*30 pt*, Similar to Textbook Exercises 3.10) This question should be answered using the `Carseats` data set.
+
+```{r}
+head(Carseats)
+```
+
+(a) Fit a multiple regression model to predict `Sales` using `US`, `Urban`, `Advertising` and `Price`.
+
+**Answer:**
+```{r}
+str(Carseats)
+lm.fit = lm(Sales ~ Price + Urban + Advertising + US, data= Carseats)
+summary(lm.fit)
+```
+&nbsp;
+&nbsp;
+
+(b) Provide an interpretation of each coefficient in the model. Be careful that some of the variables in the model are qualitative!
+
+**Answer:** 
+
+When price increases by $1000 and other predictors are held constant, sales decrease by 54.612 unit sales.
+A store’s sale is not affected by whether or not it is in a Urban area, as the p-value is larger than the significant level.
+And a store's sale is not affected by whether or not it is in the US, as the p-value is larger than the significant level.
+When the advertising increases by $1000 and other predictors are held constant, sales increases by 120.223 unit sales.
+
+&nbsp;
+&nbsp;
+
+(c) Write out the model in equation form, being careful to handle the qualitative variables properly.
+
+**Answer:** Sales ~ -0.054612 * Price + 0.120333 * Advertising + 13.011278
+&nbsp;
+&nbsp;
+
+(d) For which of the predictors can you reject the null hypothesis $H_0 : \beta_j = 0$?
+
+**Answer:** I think the predictors Price and Advertising can reject the null hypothesis, as there p-value are both < 2e-16, which is smaller than the signficance level.
+&nbsp;
+&nbsp;
+
+(e) On the basis of your response to the previous question, fit a smaller model that only uses the predictors for which there is evidence of association with the outcome.
+
+**Answer:**
+```{r}
+lm.fit2 = lm(Sales ~ Price+ Advertising, data= Carseats)
+summary(lm.fit2)
+```
+&nbsp;
+&nbsp;
+
+(f) How well do the models in (a) and (e) fit the data?
+
+**Answer:** According to their R-square values in summary tables respectively, these two models are mediocre, as there are only about 28% change in response explained.
+&nbsp;
+&nbsp;
+
+(g) Using the model from (e), obtain 90% confidence intervals for the coefficient(s).
+
+**Answer:** 
+```{r}
+confint(lm.fit2, level = 0.9)
+```
+&nbsp;
+&nbsp;
+
+
+(h) Using the leave-one-out cross-validation and 5-fold cross-validation techniques to compare the performance of models in (a) and (e). What can you tell from (f) and (h)?
+
+**Hint.** Functions `update` (with option `subset`) and `predict`.
+
+**Answer:** 
+```{r}
+library(boot)
+cv_2<- glm(Sales ~ Price + Advertising, data =Carseats)
+cv_4<- glm(Sales ~ Price + Urban + Advertising + US, data= Carseats)
+
+cv_error_2 = cv.glm(Carseats, cv_2)$delta[1]
+cv_error_2_k5 = cv.glm(Carseats, cv_2,K=5)$delta[1]
+cv_error_4 = cv.glm(Carseats, cv_4)$delta[1]
+cv_error_4_k5 = cv.glm(Carseats, cv_4,K=5)$delta[1]
+
+cv_error_2
+cv_error_2_k5
+cv_error_4
+cv_error_4_k5
+```
+According to the output, I think the model with two predictors-Sales ~ Price + Advertising-is better because the cv error is lower in both leave-one-out cross-validation and 5-fold cross-validation.
+&nbsp;
+&nbsp;

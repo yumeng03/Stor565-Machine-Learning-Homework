@@ -1,0 +1,269 @@
+---
+title: "STOR 565 Fall 2022 Homework 5"
+author: "Aubrey Wang"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+subtitle: \textbf{Due on 10/07/2022}
+header-includes: \usepackage{amsgen,amsmath,amstext,amsbsy,amsopn,amssymb,mathabx,amsthm,bm,bbm}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if(!require(ISLR)) { install.packages("ISLR", repos = "http://cran.us.r-project.org"); library("ISLR") }
+if(!require(class)) { install.packages("class", repos = "http://cran.us.r-project.org"); library("class") }
+if(!require(e1071)) { install.packages("e1071", repos = "http://cran.us.r-project.org"); library("e1071") }
+if(!require(splines)) { install.packages("splines", repos = "http://cran.us.r-project.org"); library("splines") }
+```
+\theoremstyle{definition}
+\newtheorem*{hint}{Hint}
+
+\theoremstyle{remark}
+\newtheorem*{rmk}{Remark}
+
+*Remark.* Credits for **Theoretical Part** and **Computational Part** are in total *110 pt*. At most *100 pt* can be earned. For **Computational Part**, please complete your report in the **RMarkdown** file and submit your printed PDF homework created by it.
+
+## Computational Part
+
+>> **You are supposed to finish the Computational Part in a readable report manner for each dataset-based analysis problem. Other than what you are asked to do, you can decide any details on your own discretion.**
+
+**Note.** Read Section 9.6 and 7.8 in Textbook before getting started.
+
+1. (LDA \& QDA \& KNN \& SVM,*25 pt*) In Homework 4, we have performed serveral classification techniques to predict whether an area has high or low crime rate based on the `Boston` data set. We will continue with LDA, QDA, KNN and SVM in this exercise. Write a data analysis report addressing the following problems. We only use `indus`, `nox`, `age`, `dis`, `rad` and `tax` as the predictors. They are most associated with the binary response `crim01` as argued in Homework 4. 
+ 
+    (a) Create a binary variable `crim01` as in Homework 4, and regenerate the training set and test set with ratio 1:1. 
+```{r}
+library(MASS)
+library(tidyverse)
+library(class)
+data(Boston)
+head(Boston)
+library(caret)
+
+median = median(Boston$crim)
+my_data= mutate(Boston, crim01 = ifelse(crim >= median, 1,0))
+my_data= my_data[c(3,5,7,8,9,10,15)]
+head(my_data)
+set.seed(100)
+sample = sample(1:nrow(my_data),nrow(my_data)/2)
+train  <- my_data[sample, ]
+test <- my_data[-sample, ]
+```
+    (b) Perform LDA on the training data in order to predict `crim01` using the variables `indus`, `nox`, `age`, `dis`, `rad` and `tax`. What is the test error of the model obtained? Report the False Positive Rate and False Negative Rate on the test data.
+```{r}
+lda<- lda(crim01 ~., data=train)
+lda
+lda.class= predict(lda,test)$class
+table(lda.class,test$crim01)
+mean = mean(lda.class==test$crim01)
+
+
+#test error
+1-mean
+
+#false-positive rate
+4/(4+126)
+#false-negative rate
+39/(39+84)
+
+#Thus, the test error is 0.1699605. The false positive rate is 0.03076923, and the false negative rate is 0.3170732.
+```
+    (c) Perform QDA on the training data in order to predict `crim01` using the variables that seemed most associated with `crim01` in (b). What is the test error of the model obtained? Report the False Positive Rate and False Negative Rate on the test data.
+```{r}   
+qda <- qda(crim01 ~., data=train)
+qda
+qda_pred <- predict(qda, test)$class
+table(qda_pred, test$crim01)
+mean1=mean(qda_pred == test$crim01)
+
+#test error
+1-mean1
+
+#false positive rate
+3/(3+127)
+
+# false negative rate
+27/(96+27)
+
+#Thus, the test error for QDA is 0.1185771, and the false positive rate is 0.02307692, and the false negative rate is 0.2195122
+
+```
+    (d) Perform KNN on the training data, with several values of $K$, in order to predict `crim01`. Use only `indus`, `nox`, `age`, `dis`, `rad` and `tax`. Report the cross-validation errors associated with different values of $K$. Comment on your results.
+```{r} 
+trControl = trainControl(method  = "cv", number  = 5)
+fit <- train(as.factor(crim01) ~ indus+nox+age+dis+rad+tax,
+  method     = "knn",
+  tuneGrid   = expand.grid(k = 1:10),
+  trControl  = trControl,
+  metric     = "Accuracy",
+  data       = train)
+fit
+```
+    (e) Fit a support vector classifier to the training data with various values of `cost`, in order to predict whether an area has high or low crime rate. Report the cross-validation errors associated with different values of this parameter. Comment on your results.
+```{r}   
+set.seed(1)
+svm_train= data.frame(x=train[c(1,2,3,4,5,6)],y=as.factor(train$crim01))
+tune = tune(svm,y~.,data = svm_train,kernel = "polynomial",ranges = list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+summary(tune)
+tune$best.parameters
+
+tune$best.performance
+#Thus, the CV result shows the lowest training error is 0.1064615，which is when cost = 100.
+```
+
+    (f) Now repeat (e), this time using SVMs with radial and polynomial basis kernels, with different values of `gamma` and   `degree` and `cost`. Comment on your results.
+```{r} 
+tune_radial = tune(svm, y~., data = svm_train ,
+kernel = "radial", ranges = list(
+cost = c(0.01, 0.1, 1, 10, 100, 1000),
+gamma = c(0.5, 1, 2, 3, 4) )
+)
+tune_polynomial <- tune(svm, y~.,data = svm_train,kernel = "polynomial",ranges = list(cost = c(0.01, 0.1, 1, 10, 100, 1000),
+              degree = c(1:10)))
+
+tune_radial
+tune_polynomial
+#Thus, as for svm with radical kernel, cost = 10 and gamma = 2 returns the smallest CV which is 0.05985; and as for svm with polynomical kernel. cost = 1000 and gamma = 3 returns the smallest error which is 0.08738462.
+```
+    (g) Make some plots to back up your assertions in (d), (e) and (f).
+```{r} 
+plot(tune)
+plot(tune_radial)
+plot(tune_polynomial)
+```
+    (h) Compare the test errors of LDA, QDA, the best tuned models for KNN, linear SVM, SVM with radial basis kernel, and SVM with polynomial basis kernel.
+    
+The test errors of LDA is 0.1699605, test error of QDA is 0.1185771, test error of KNN is 0.1064615, test error of SVM with radial basis kernel is 0.05984615 , test error of SVM with polynomial basis kernel is 0.08738462 . We can see that the SVM with radial basis kernel performs best.
+***
+
+**Hint.** In the lab, we used the `plot()` function for svm objects only in cases with $p = 2$. When $p > 2$, you can use the `plot()` function to create plots displaying pairs of variables at a time. Essentially, instead of typing
+    
+```{r eval=FALSE}
+plot(svmfit, dat)
+```
+
+where `svmfit` contains your fitted model and `dat` is a data frame containing your data, you can type
+
+```{r eval=FALSE}
+plot(svmfit, dat, x1 ~ x4)
+```
+
+in order to plot just the first and fourth variables. However, you must replace `x1` and `x4` with the correct variable names. To find out more, type `?plot.svm`.
+
+***
+
+2. (Polynomial Regression and Regression Spline, *25 pt*) This question uses the variables `horsepower` (engine horsepower) and `displacement` (engine displacement) from the `Auto` data. We will treat `horsepower` as the predictor and `displacement` as the response. Write a data analysis report addressing the following problems.
+
+    (a) Use the `poly()` function to fit a cubic polynomial regression to predict `displacement` using `horsepower`. Report the regression output, and plot the resulting data and polynomial fits.
+```{r}
+head(Auto)
+poly=lm(displacement~poly(horsepower,3),data=Auto)
+summary(poly)
+ggplot(data=Auto, aes(horsepower,displacement)) +
+        geom_point() +
+        geom_smooth(method="lm", formula=y~poly(x,3))
+```
+    (b) Plot the polynomial fits for a range of different polynomial degrees (say, from 1 to 10), and report the associated residual sum of squares.
+```{r}  
+par(mfrow=c(3,3))
+for (i in 1:10){
+  poly.fit=lm(displacement~poly(horsepower,i),data=Auto)
+  print(deviance(poly.fit))
+  par(mfrow=c(5,2))
+  print(ggplot(data=Auto, aes(horsepower,displacement)) +
+        geom_point() +
+        geom_smooth(method="lm", formula=y~poly(x,i)))
+}
+```  
+    (c) Perform cross-validation or another approach to select the optimal degree for the polynomial, and explain your results.
+
+```{r}  
+library(boot)
+for (i in 1:10){ 
+  poly.train=glm(displacement~poly(horsepower,i),data=Auto) 
+  cv.error=cv.glm(Auto,poly.train,K=10) 
+  print(cv.error$delta)
+}   
+
+#Thus, the optimal degree is 4 and the model has returned the smallest cv error. Thus, we have determined our complexity to be degree=4.
+```
+    (d) Use the `bs()` function to fit a cubic B-Spline to predict `displacement` using `horsepower`. Report the output for the fit using four degrees of freedom without an intercept. This means there is one knot. How did you choose the knots? Plot the resulting fit.
+```{r}  
+bs = lm(displacement~bs(horsepower,df=4),data=Auto)
+hplims <- range(Auto$horsepower)
+hp.grid <- seq(from = hplims[1], to = hplims[2])
+pred <- predict(bs, newdata = list(horsepower = hp.grid), se = T)
+plot(Auto$horsepower, Auto$displacement, col = "gray")
+lines(hp.grid, pred$fit, lwd = 2)
+attr(bs(Auto$horsepower, df = 4), "knots")
+
+# Thus, as for how I choose the knots, it will locate at the value that divide the data to two parts. The attr function shows that the knots is at horsepower=93.5.
+```
+    (e) Now fit a cubic B-Spline for a range of degrees of freedom, and plot the resulting fits and report the resulting RSS. Describe the results obtained.
+```{r}   
+par(mfrow=c(2,5)) 
+for (i in 4:13){
+  bs.cubic=lm(displacement~bs(horsepower,df=i),data=Auto)
+  hplims <- range(Auto$horsepower)
+  hp.grid <- seq(from = hplims[1], to = hplims[2])
+  pred <- predict(bs.cubic, newdata = list(horsepower = hp.grid), se = T)
+plot(Auto$horsepower, Auto$displacement, col = "gray")
+  lines(hp.grid, pred$fit, lwd = 2)
+  print(deviance(bs.cubic))
+}
+
+#  Looking at the RSS, we can conclude that spline with 9 knots returns the smallest RSS.
+
+```
+    (f) Perform cross-validation or another approach in order to select the best degrees of freedom for a cubic B-Spline on this data. Describe your results. 
+```{r} 
+for (i in 4:13){
+fit=model.frame(displacement ~ bs(horsepower, df=i), data=Auto) 
+names(fit)=c("displacement", "bs.horsepower")
+spline.fit = glm(displacement~bs.horsepower,data=fit)
+cv.error=cv.glm(spline.fit,data=fit,K=10)
+print(cv.error$delta[1])
+}
+#the cross validation result shows that when df=12 I have the lowest CV error of 1907.
+```
+    (g) Use the `ns()` function to fit a natural cubic spline to predict `displacement` using `horsepower`. Report the output for the fit using four degrees of freedom without an intercept. This means there are three internal knots. 
+```{r} 
+ns.cubic=lm(displacement~ns(horsepower,df=4),data=Auto)
+hplims = range(Auto$horsepower)
+hp.grid = seq(from = hplims[1], to = hplims[2])
+pred = predict(ns.cubic, newdata = list(horsepower = hp.grid), se = T)
+plot(Auto$horsepower, Auto$displacement, col = "gray")
+lines(hp.grid, pred$fit, lwd = 2)
+summary(ns.cubic)
+attr(ns(Auto$horsepower, df = 4), "knots")
+
+# As 3 knots divided the curve into four pieces. Three knots located at 75, 93.5, and 126 respectively, The natural spline returns a adjr2 of 0.82, which is good.
+```
+    (h) Now fit a natural cubic spline for a range of degrees of freedom, and plot the resulting fits and report the resulting RSS. Describe the results obtained.
+```{r} 
+par(mfrow=c(2,5)) 
+for (i in 4:13){
+  ns.cubic=lm(displacement~ns(horsepower,df=i),data=Auto)
+  hplims <- range(Auto$horsepower)
+  hp.grid <- seq(from = hplims[1], to = hplims[2])
+  pred <- predict(ns.cubic, newdata = list(horsepower = hp.grid), se = T)
+  plot(Auto$horsepower, Auto$displacement, col = "gray")
+  lines(hp.grid, pred$fit, lwd = 2)
+  print(deviance(ns.cubic))
+}
+
+# Thus, looking through the output, we can find that df=13 gives me the lowest training RSS. (as 680400.9 is the smallest output)
+```
+    (i) Perform cross-validation or another approach in order to select the best degrees of freedom for a natural cubic spline on this data. Describe your results. 
+```{r}    
+for (i in 4:13){
+fit=model.frame(displacement ~ ns(horsepower, df=i), data=Auto)
+names(fit)=c("displacement", "ns.horsepower")
+spline.fit=glm(displacement~ns.horsepower,data=fit) 
+cv.error=cv.glm(spline.fit,data=fit,K=10) 
+print(cv.error$delta[1])
+}
+# Thus, when df=10 I have the lowest CV error of 1860.973.
+```
+***

@@ -1,0 +1,192 @@
+---
+title: "STOR 565 Fall 2022 Homework 6"
+author: "Aubrey Wang"
+output:
+  html_document: default
+  pdf_document: default
+subtitle: \textbf{Due on 10/31/2022}
+header-includes: \usepackage{amsgen,amsmath,amstext,amsbsy,amsopn,amssymb,mathabx,amsthm,bm,bbm}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+\theoremstyle{definition}
+\newtheorem*{hint}{Hint}
+
+\theoremstyle{remark}
+\newtheorem*{rmk}{Remark}
+
+*Remark.* Credits for **Theoretical Part** and **Computational Part** are in total *110 pt*. At most *100 pt* can be earned. For **Computational Part**, please complete your report in the **RMarkdown** file and submit your printed PDF homework created by it.
+
+## Computational Part
+
+>> **You are supposed to finish the Computational Part in a readable report manner for each dataset-based analysis problem. Other than what you are asked to do, you can decide any details on your own discretion.**
+
+ 
+***
+
+1. (Regression Tree, Boosting, Bagging and Random Forest, *60 pt*) This problem involves the `Auto` data set which is part of the `ISLR` package. Write a report to address the following problems.
+
+    (a) Create a binary variable, `mpg01`, that contains a 1 if `mpg` contains a value greater than or equal to its median, and a 0 if `mpg` contains a value below its median. Create a training set containing a random sample of 300 observations, and a test set containing the remaining observations.
+```{r}
+library(MASS)
+library(ISLR)
+library(tree)
+library(tidyverse)
+
+data(Auto)
+
+mpg.median = median(Auto$mpg)
+auto <- mutate(Auto,mpg01=ifelse(mpg>=mpg.median,1,0)) 
+auto <- transform(auto, origin = as.factor(origin))
+auto <- subset(auto, select = -c(name))
+head(auto)
+
+set.seed(1000)
+sample = sample(1:nrow(auto),300)
+train<- auto[sample, ]
+test <- auto[-sample, ]
+```
+    (b) Fit a tree to the training data, with `mpg01` as the response and the other variables as predictors. Use the `summary()` function to produce summary statistics about the tree, and describe the results obtained. What is the training error rate? How many terminal nodes does the tree have?
+```{r}
+tree.auto = tree(factor(mpg01) ~ .-mpg, train)
+summary(tree.auto)
+tree.train.error = 0.05667
+# There are 11 nodes for the tree
+```
+    (c) Type in the name of the tree object in order to get a detailed text output. Pick one of the terminal nodes, and interpret the information displayed.
+```{r}
+tree.auto
+#interpreting the terminal node 8) year < 73.5 33  34.110 1 ( 0.212121 0.787879 ): 1. the number of observations in that branch is 33, and it;s deviance is 34.110, overall prediction is 1, and fraction of observations in this branch that takes on values of "0 and "1" are ( 0.212121 0.787879 ).
+```
+    (d) Create a plot of the tree, and interpret the results.
+```{r} 
+plot(tree.auto)
+text(tree.auto, pretty=0)
+#interpretation: the most important indicator of “mpg01” appears to be “displacement”. its value of less than 189.5 is pretty much going to be classified as “1”, if the horsepower is less than 96.5 and year <73.5 as well as displacement<113.5, it will be classified as "0", and horsepower >= 96.5 and weight is >= 2710 and year is < 77.5, it will be classified as 0 and else will classified as 1.
+
+#value of displacement >= 189.5 as “0”.
+```
+    (e) Predict the response on the test data, and produce a confusion matrix comparing the test labels to the predicted test labels. What is the test error rate?
+```{r}  
+tree.pred <- predict(tree.auto, test, type = "class") 
+table(tree.pred, test$mpg01)
+mpg01.test = auto$mpg01[-sample]
+
+tree.test.error = round(mean(tree.pred != mpg01.test)*100,2)
+tree.test.error
+# test error rate is 6.52%
+```
+    (f) Apply the `cv.tree()` function to the training set in order to determine the optimal tree size.
+```{r} 
+cv.auto = cv.tree(tree.auto, FUN = prune.misclass)
+cv.auto
+```
+    (g) Produce a plot with tree size on the $x$-axis and cross-validated classification error rate on the $y$-axis.
+```{r}   
+plot(cv.auto$size, cv.auto$dev, type="b")
+```
+    (h) Which tree size corresponds to the lowest cross-validated classification error rate?
+    
+Tree size of “4” appears to have lowest cross-validation error rate at 29. 
+    
+    (i) Produce a pruned tree corresponding to the optimal tree size obtained using cross-validation. If cross-validation does not lead to selection of a pruned tree, then create a pruned tree with five terminal nodes.
+```{r}   
+prune.auto = prune.misclass(tree.auto, best=5)
+summary(prune.auto)
+plot(prune.auto)
+text(prune.auto, pretty=0)
+prune.train.error = 8.667
+prune.train.accuracy = 100-prune.train.error
+#Training-Error-rate (pruned tree) = 6 %
+```
+    (j) Compare the training error rates between the pruned and unpruned trees. Which is higher?
+
+Training error rate of pruned tree is 8.667% vs. for unpruned tree it was 5.667%. 
+Training error rate of pruned tree is higher and it is reasonable, as by pruning we have reduced the flexibility in the model.
+Because of that training error has gone little bit up due to increase in Bias even though variance of the model reduced.  
+
+    (k) Compare the test error rates between the pruned and unpruned trees. Which is higher?
+```{r}
+prune.pred = predict(prune.auto, test, type="class")
+table(prune.pred, mpg01.test)
+prune.test.accuracy = round(mean(prune.pred == mpg01.test)*100,2)
+prune.test.accuracy
+prune.test.error = round(mean(prune.pred != mpg01.test)*100,2)
+prune.test.error
+# thus, the test error rate of pruned tree with terminal nodes is 13.04%, and unpruned with terminal node is 6.52%.
+```
+    (l) Perform boosting on the training set with 1,000 trees for a range of values of the shrinkage parameter $\lambda$. Produce a plot with different shrinkage values on the $x$-axis and the corresponding training error and test error on the $y$-axis. Which variables appear to be the important predictors in the boosted model?
+```{r}   
+library(gbm)
+set.seed(100)
+lambdas = c(0.0001, 0.001,0.01) 
+for (i in lambdas){
+ boost.fit <- gbm(mpg01 ~.-mpg, train, distribution = "bernoulli", n.trees =
+1000,
+                  shrinkage = i)
+ print(summary(boost.fit))
+ boost.pred.train = predict(boost.fit, train) 
+ boost.pred.test = predict(boost.fit, test) 
+ for (j in 1:length(boost.pred.train)){
+ if (boost.pred.train[j]>0){
+ boost.pred.train[j]=1 } 
+ else{ boost.pred.train[j]=0 }
+ }
+}
+print(table(boost.pred.train, train$mpg01)) 
+for (j in 1:length(boost.pred.test)){
+if (boost.pred.test[j]>0){
+boost.pred.test[j]=1
+} else{
+boost.pred.test[j]=0
+}
+}
+print(table(boost.pred.test, test$mpg01))
+
+par(mfrow = c(2,1))
+train.error <- list(30/300, 26/300, 15/300)
+test.error <- list(8/90,9/90, 7/90)
+plot(lambdas, train.error, type="b", xlab = "Shrinkage", ylab = "Train MSE")
+plot(lambdas, test.error, type = "b", xlab = "Shrinkage", ylab = "Test MSE")
+
+
+```
+    (m) Perform bagging on the training set and report the prediction performance on the test set. Which variables are identified to be important predictors?
+```{r} 
+library(randomForest)
+set.seed(100)
+bag <- randomForest(factor(mpg01) ~ .-mpg, train, mtry=5, importance = T)
+bag
+importance(bag)
+bag.pred <- predict(bag, test)
+table(bag.pred, test$mpg01)
+
+test_error2=(2+4)/(4+2+43+43)
+test_error2
+```
+    (n) Perform random forest on the training set with $\sqrt{p}$ and $p/3$ predictors respectively and report the prediction performance on the test set. Which variables are identified to be important predictors?
+```{r}    
+#sqrtp
+set.seed(100)
+rf.fit.0 <- randomForest(factor(mpg01) ~.-mpg, train, mtry = sqrt(5),
+importance = T)
+rf.pred.0 <- predict(rf.fit.0, test)
+table(rf.pred.0, test$mpg01)
+test_error3=(4+2)/(43+43+4+2)
+test_error3
+importance(rf.fit.0)
+
+## p/3
+set.seed(100)
+rf.fit.1 <- randomForest(factor(mpg01) ~.-mpg, train, mtry = 5/3,
+importance = T)
+rf.pred.2 <- predict(rf.fit.1, test)
+table(rf.pred.2, test$mpg01)
+
+test_error4=(4+2)/(43+43+4+2)
+test_error4
+```
+    (o) Compare the above models.
+Compared the above models, I think unpruned decision tree and random forest provide the most accurate models, which have the lowest test error rate, which is 6.52%. 

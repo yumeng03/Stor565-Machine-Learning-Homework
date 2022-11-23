@@ -1,0 +1,223 @@
+---
+title: "STOR 565 Fall 2022 Homework 4"
+author: "Aubrey Wang"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+subtitle: \textbf{Due on 09/23/2022 in Class}
+header-includes: \usepackage{amsgen,amsmath,amstext,amsbsy,amsopn,amssymb,mathabx,amsthm,bm,bbm}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if(!require(MASS)) { install.packages("MASS", repos = "http://cran.us.r-project.org"); library(MASS) }
+if(!require(dplyr)) { install.packages("dplyr", repos = "http://cran.us.r-project.org"); library(dplyr) }
+if(!require(class)) { install.packages("ISLR", repos = "http://cran.us.r-project.org"); library(class) }
+if(!require(ISLR)) { install.packages("ISLR", repos = "http://cran.us.r-project.org"); library(ISLR) }
+if(!require(car)) { install.packages("car", repos = "http://cran.us.r-project.org"); library(car) }
+if(!require(glmnet)) { install.packages("glmnet", repos = "http://cran.us.r-project.org"); library(glmnet) }
+if(!require(pls)) { install.packages("pls", repos = "http://cran.us.r-project.org"); library(pls) }
+if(!require(e1071)) { install.packages("e1071", repos = "http://cran.us.r-project.org"); library(e1071) }
+```
+\theoremstyle{definition}
+\newtheorem*{hint}{Hint}
+
+\theoremstyle{remark}
+\newtheorem*{rmk}{Remark}
+
+*Remark.* Credits for **Theoretical Part** and **Computational Part** are in the total of  *110 pt*. At most *100 pt* can be earned. For the **Computational Part**, please complete your report in the **RMarkdown** file and submit your printed PDF homework created by it.
+
+## Computational Part
+
+>> **Starting from this homework, you are supposed to finish the Computational Part in a readable report manner for each dataset-based analysis problem. Other than what you are asked to do, you can decide any details at your own discretion.**
+
+##### Tips
+
+(i) Carefully read Textbook Section 4.6 (Lab) before getting started. The Lab section is a benchmark for you to format your report.
+
+(ii) Only report relevant codes and results. Detailed codes for secondary goal (*e.g.* codes for generating a graph) might be suppressed. Plots for illustrating one purpose might be combined into one window. Learn more from Homework 1 about how to control the display in **RMarkdown**.
+
+(iii) Your grades would be decided based on the relevance, appropriateness and completeness of your report in addressing the problems as well as your report format.
+
+(iv) Inline computation or reference of **R** object might be more convenient and flexible than a code chunck. You might use a pair of single backticks inline `` `r "\u0060r \"Hello World!\"\u0060"` `` to display: `r "Hello World!"`.
+
+(v) PDF output is of prior recommendation in its neat format. However, it does NOT automatically break lines when you have a long codes in one line. Manually break lines in case of line overflow.
+
+(vi) **RMarkdown** is line sensitive and indent sensitive. It's always a good habit to break empty lines before and after code chuncks. You also need to match the indent of items and code chunk identifiers (the triple backticks) in case of the nonrecognition of your code chunks.
+
+***
+
+1. (*10 pt*) In this problem, you will use PLS regression to develop a model to predict the crime rate based on the `Boston` data set in the `MASS` package. You should divide the dataset into a training set and a testing set with ratio 1:1. Note that this is a follow-up for the second problem in the HW3. 
+
+    (a) Use cross-validation on the training set to find the best number of components of PLS. You can use any reasonable criteria. Then use the best model to predict on the test set and obtain the prediction MSE estimate. 
+    ```{r, eval = F}
+library(MASS)
+data(Boston)
+head(Boston)
+```
+```{r}
+set.seed(1)
+Boston[1:10]
+sample = sample(1:nrow(Boston),nrow(Boston)/2)
+train = Boston[sample, ]
+test = Boston[-sample, ]
+
+train_x = model.matrix(crim~., data = train)
+test_x = model.matrix(crim~., data = test)
+train_y = train$crim
+test_y = test$crim
+
+pls= plsr(crim~., data = train, scale = TRUE, validation = "CV")
+summary(pls)
+validationplot(pls,val.type = "MSEP")
+
+predict = predict(pls,test,ncomp=8)
+mean((test_y - predict)^2)
+
+# Thus, the CV shows that when M = 8 is the best parameter to fit on the training set as the most of the variance are included, ad MSE estimate is 41.45478.
+```
+    (b) Summarize, discuss and compare the results of linear least squares model, LASSO, ridge, PCR of HW3 and the PLS results just obtained. 
+The results of linear least squares model, LASSO and P:S shows similar results, the MSE estimate is around 41, while PCR gives MSE estimate as 43. Ridge gives the worst result which is more than 47.
+
+In general, they all did a good job on predicting the number of crimes. Ridge predicts the best while PCR did the worst. PLS has comparable performance as linear model as PCR, and is more worse than the ridge regression and the LASSO. Although the performance varies among these methods, the predicted MSEs don't differ much.
+***
+
+2. (*20 pt*) In this problem, you will develop a model to predict whether a given area has high or low crime rate based on the `Boston` data set in the `MASS` package. Note that we only consider the first nine predictors which are `zn`, `indus`, `chas`, `nox`, `rm`, `age`, `dis`, `rad` and `tax` throughout this problem. Write a data analysis report addressing the following problems.
+
+    (a) Create a binary variable, `crim01`, that contains a 1 if `crim` has a value equal to or above its median, and a 0 if `crim` has a value below its median.
+```{r}
+Boston_new = Boston[1:10]
+median = median(Boston_new$crim)
+Boston_new = mutate(Boston_new, crim01 = ifelse(crim >= median, 1,0))
+median
+```
+    (b) Explore the data graphically (only consider nine predictors `zn`, `indus`, `chas`, `nox`, `rm`, `age`, `dis`, `rad` and `tax`) in order to investigate the association between `crim01` and the nine features. Which of the nine features seem most likely to be useful in predicting `crim01`? Scatterplots and boxplots may be useful tools to answer this question. Describe your findings.
+```{r}
+cor=cor(Boston_new[2:11])
+corrplot::corrplot(cor,method="number")
+
+boxplot(Boston_new$crim01,Boston_new$zn)
+boxplot(Boston_new$crim01,Boston_new$indus)
+boxplot(Boston_new$crim01,Boston_new$chas)
+boxplot(Boston_new$crim01,Boston_new$nox)
+boxplot(Boston_new$crim01,Boston_new$rm)
+boxplot(Boston_new$crim01,Boston_new$age)
+boxplot(Boston_new$crim01,Boston_new$dis)
+boxplot(Boston_new$crim01,Boston_new$rad)
+boxplot(Boston_new$crim01,Boston_new$tax)
+```
+    (c) Split the data into a training set and a test set with ratio 1:1.
+```{r}
+set.seed(1)
+sample_1 = sample(1:nrow(Boston_new),nrow(Boston_new)/2)
+train_1  <- Boston_new[sample_1, ]
+test_1 <- Boston_new[-sample_1, ]
+```
+    (d) Perform logistic regression on the training data in order to predict `crim01` using the variables that seemed most associated with `crim01` in (b). What is the test error of the model obtained? Report the False Positive Rate and False Negative Rate on the test data. Note that False Positive Rate = (number of low crime rate areas classified as high crime rate)/(number of low crime rate areas). Similarly, False Negative Rate = (number of high crime rate areas classified as low crime rate)/(number of high crime rate areas).
+```{r}
+glm=glm(crim01~zn+nox+rm+age+dis+rad+tax,data=train_1,family="binomial")
+summary(glm)
+
+coef(glm)
+glm.pre=predict(glm, test_1, type="response")
+glm.pre[1:10]
+
+crim01=test_1$crim01
+contrasts(factor(crim01))
+glm.pred <- rep("0", 253)
+glm.pred[glm.pre > median] = "1"
+
+table(glm.pred,crim01)
+mean(glm.pred==crim01)
+sum(crim01==0)
+sum(crim01!=0)
+
+False_Positive_Rate = 32/126
+False_Negative_Rate = 5/127
+False_Positive_Rate
+False_Negative_Rate
+# Based on the result, we can find the accuracy is 85.38%, and the error rate is 14.62%. False_Positive_Rate is 25.4%, and False_Negative_Rate is 3.937%.
+```
+    (e) Perform Naive Bayes on the training data in order to predict `crim01` using the variables that seemed most associated with `crim01` in (b). What is the test error of the model obtained? Report the False Positive Rate and False Negative Rate on the test data.
+```{r}
+nb.fit=naiveBayes(crim01~zn+nox+rm+age+dis+rad+tax,data=train_1)
+nb.class=predict(nb.fit,test_1)
+table(nb.class,crim01)
+mean(nb.class==crim01)
+sum(crim01==0)
+sum(crim01!=0)
+
+False_Positive_Rate_1 = 19/126
+False_Negative_Rate_1 = 32/127
+False_Positive_Rate_1
+False_Negative_Rate_1
+
+# Thus, the accuracy is 79.84%, error rate is 20.16%.False_Positive_Rate_1 is 15.08%, and False_Negative_Rate_1 is 25.2%.
+```
+***
+
+
+3. (*20 pt*) In this problem, you will compare the performance of logistic regression and Naive Bayes classifier on datasets with different joint distributions. The dataset has the form $\{\mathbf{X}_{i},Y_{i}\}_{1\le i\le n}$. Here $\mathbf{X}\in \mathbb{R}^{2}$ and $Y_{i}\in\{0,1\}$. 
+
+    (a) Assume $\mathbb{P}(Y = 1) =\mathbb{P}(Y = 0)= \frac{1}{2}$. Conditional on $Y=1$, $X$ follows a bivariate distribution with mean vector $\mu_{1} = (\alpha,0)^{T}$, covariance matrix $\Sigma_{1} = \begin{pmatrix} \rho_{1}&\rho_{2}\\ \rho_{2}&\rho_{1}\\ \end{pmatrix}$. Conditional on $Y=0$, $X$ follows a bivariate distribution with mean vector $\mu_{2} = (-\alpha,0)^{T}$, covariance matrix $\Sigma_{2} = \begin{pmatrix} \rho_{3}&\rho_{4}\\ \rho_{4}&\rho_{3}\\ \end{pmatrix}$. Write a function to assess the performance of logistic regression and Naive Bayes classifier with input $\alpha, \rho_{1}, \rho_{2},\rho_{3}$ and $\rho_{4}$. First you should randomly generate $n = 200$ dataset $\{\mathbf{X}_{i},Y_{i}\}_{1\le i\le 200}$ with i.i.d. samples $\{\mathbf{X}_{i},Y_{i}\}$ following the above distribution. Then you can split the dataset into a $100$ size training set and a same size testing set. You can then train the two models on the training set and assess their performance on the test set by the prediction accuracy. Note that you should do many times of data generation (for example, 100 times) and report the mean accuracy of the two methods. 
+```{r}
+result=function(alpha,rho1,rho2,rho3,rho4){
+  mu1=c(alpha,0)
+  mu2=c(-alpha,0)
+  sigma1=matrix(c(rho1,rho2,rho2,rho1),2,2)
+  sigma2=matrix(c(rho3,rho4,rho4,rho3),2,2)
+  accuracy=matrix(0,200,2)
+  p=0.5
+  n=200
+
+set.seed(1)
+for (i in 1:200){
+  n1=rbinom(1,n,p)
+  n2=n-n1
+  x1=mvrnorm(n1,mu1,sigma1)
+  x2=mvrnorm(n2,mu2,sigma2)
+  x=rbind(x1,x2)
+  x=cbind(c(rep(1,n1),rep(0,n2)),x)
+  data=data.frame(y=x[,1],x1=x[,2],x2=x[,3])
+  data=data[sample(n),]
+  train=data[1:(n/2),]
+  test=data[(n/2+1):n,]
+  
+  log.mod=glm(y~.,data=train,family=binomial)
+  accuracy[i,1]=mean((predict(log.mod,test,type="response")>0.5)==test$y)
+  nb.mod=naiveBayes(y~.,data=train)
+  accuracy[i,2]=mean((predict(nb.mod,test,type="raw")[,2]>0.5)==test$y)
+}
+compare=data.frame(mean=apply(accuracy,2,mean),sd=apply(accuracy,2,sd))
+rownames(compare)=c("logistic","NB")
+return(compare)
+}
+```
+    (b) For $\alpha = 0.5,\rho_{1} = 1,\rho_{2} = 0, \rho_{3} = 1,\rho_{4} = 0$, how is the performance of the two methods? Discuss and explain the results. 
+```{r}
+result(0.5,1,0,1,0)
+# Looking through the output, we can find that logistic regression and Naive Bayes give us the similar output.
+```
+    (c) For $\alpha = 1,\rho_{1} = 1,\rho_{2} = 0, \rho_{3} = 1,\rho_{4} = 0$, how is the performance of the two methods compared with in (b)? Discuss and explain the results. 
+```{r}
+result(1,1,0,1,0)
+# Here, we change the alpha from 0.5 to 1, and this improves in both logistic regression and the Naive Bayes.
+```
+    (d) For $\alpha = 1,\rho_{1} = 2,\rho_{2} = 0, \rho_{3} = 2,\rho_{4} = 0$, how is the performance of the two methods compared with in (c)? Discuss and explain the results.  
+```{r}
+result(1,2,0,2,0)
+# Compared to part b, we change rho1 and rho3 from 1 to 2, which makes the results for both methods worse.
+```
+    (e) For $\alpha = 1,\rho_{1} = 6,\rho_{2} = 0, \rho_{3} = 2,\rho_{4} = 0$, how is the performance of the two methods compared with in (d)? Discuss and explain the results. 
+```{r}
+result(1,6,0,2,0)
+# here we can find that if we change rho1 from 2 to 6, the Naive Bayes gives us the similar result compared to the previous part, but the logistic get much worse than the previous one. This is because if we change rho1 to 0, it will not be linear anymore. Logistic regression works better in linear situation than other else. So Naive Bayes performs better.
+```
+    (f) Can you find a set of possible values of $\alpha,\rho_{1},\rho_{2},\rho_{3}$ and $\rho_{4}$ that the logistic regression has over 5% accuracy improvement over the Native Bayes (the difference between the accuracies for the logistic regression and the Naive Bayes)? Report your findings, results and reason for this phenomenon.
+```{r}
+result(1,1,0.65,1,0.65)
+# In this part, we change rho1, rho2, rho3 and rho4 to 1, 0.65, 1, 0.65 respectively. Increasing rho2 and rho4 helps improving both methods accuracy - makes the performance for the both methods better.
+```
+***
+

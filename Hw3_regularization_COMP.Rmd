@@ -1,0 +1,323 @@
+---
+title: "STOR 565 Fall 2022 Homework 3"
+author: "Aubrey Wang"
+output:
+  word_document: default
+  pdf_document: default
+  html_document: default
+subtitle: \textbf{Due on 09/14/2022 in Class}
+header-includes: \usepackage{amsgen,amsmath,amstext,amsbsy,amsopn,amssymb,mathabx,amsthm,bm,bbm}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if(!require(ISLR)) { install.packages("ISLR", repos = "http://cran.us.r-project.org"); library(ISLR) }
+if(!require(leaps)) { install.packages("leaps", repos = "http://cran.us.r-project.org"); library(leaps) }
+if(!require(glmnet)) { install.packages("glmnet", repos = "http://cran.us.r-project.org"); library(glmnet) }
+if(!require(pls)) { install.packages("pls", repos = "http://cran.us.r-project.org"); library(pls) }
+```
+\theoremstyle{definition}
+\newtheorem*{hint}{Hint}
+
+\theoremstyle{remark}
+\newtheorem*{rmk}{Remark}
+
+*Remark.* This homework aims to help you further understand the model selection techniques in linear models. For the **Computational Part**, please complete your answers in the **RMarkdown** file and print your generated PDF file created by it.
+
+## Computational Part
+
+**Hint.** Before starting your work, carefully read Textbook Chapter 6.5-6.7 (Labs 1-3). Mimic the related analyses you learn from it. Related packages have been loaded in the setup.
+
+1. (Model Selection and Best Subset Prediction, *25 pt*) In this exercise, we will generate simulated data, and will then use the data to perform model selection.
+
+    (a) Use the `rnorm` function to generate a predictor $\mathbf{X}$ of length $n = 200$, as well as a noise vector $\boldsymbol{\epsilon}$ of length $n = 200$.
+```{r}
+set.seed(1)
+X <- rnorm(200)
+noise <- rnorm(200)
+```
+    (b) Generate a response vector $\mathbf{Y}$ of length $n = 200$ according to the model $$ Y = \beta_0 + \beta_1 X + \beta_2 X^2 + \beta_3 X^3 + \epsilon, $$ where $\beta_0 = 4$, $\beta_1 = 3$, $\beta_2 = -4$, $\beta_3 = 0.4$. Split the data set into a  size-$100$ training set and a  size-$100$ test set. (You can just let the first 100 samples be the training set)
+```{r}
+Y <- 4 + 3*X -4*X^2+0.4*X^3 + noise
+data_all = data.frame(Y,X)
+p = 10
+for (i in 2:p)
+  data_all = cbind(data_all, X^i)
+colnames(data_all)[-1] = paste("X",1:p,sep = "")
+colnames(data_all)
+set.seed(1)
+train = data_all[1:100,]
+test = data_all[101:200,]
+```
+
+    (c) Use the `regsubsets` function from `leaps` package to perform best subset selection in order to choose the best model containing the predictors $(X, X^2, \cdots, X^{10})$. What is the best model obtained according to $C_p$, BIC, and adjusted $R^2$? Show some plots to provide evidence for your answer, and report the coefficients of the best model obtained. Calculate the test errors of these coefficients. 
+    
+```{r}
+library(leaps)
+regfit = regsubsets(Y ~., data = train, nvmax = 10)
+reg.summary = summary(regfit)
+reg.summary
+#r squared
+reg.summary$rsq
+
+#plot
+par(mfrow = c(1,3))
+
+# for adjusted R^2
+plot(reg.summary$adjr2, xlab = "Number of Variables", ylab = "Adjusted R Squared", type = "l")
+which.max(reg.summary$adjr2)
+points(9,reg.summary$adjr2[9], col= "red", cex = 2, pch = 20)
+coef(regfit, 9)
+
+# for Cp
+plot(reg.summary$cp, xlab = "Number of Variables", ylab = "Cp",type = "l")
+which.min(reg.summary$cp)
+points(3, reg.summary$cp[3], col = "red", cex = 2, pch = 20)
+coef(regfit, 3)
+
+# for BIC
+which.min(reg.summary$bic)
+plot(reg.summary$bic, xlab = "Number of Variables", ylab = "BIC", type = "l")
+points(3, reg.summary$bic[3], col = "red", cex = 2, pch = 20)
+coef(regfit, 3)
+
+# Now, start calculating the test errors.
+library(glmnet)
+x_train = model.matrix(Y ~ ., data = train)
+y_train = train$Y
+x_test = model.matrix(Y ~ ., data = test)
+y_test = test$Y
+which.var = reg.summary$which
+
+# As for Adjusted R^2
+adjr2_X = x_test[,which.var[which.max(reg.summary$adjr2),]]
+beta_adjr2 = coef(regfit, id = which.max(reg.summary$adjr2))
+test_adjr2 = sum((test[,1]-as.matrix(adjr2_X)%*%as.matrix(beta_adjr2))^2)
+test_adjr2
+
+
+# As for Cp
+Cp_X <- x_test[,which.var[which.min(reg.summary$cp),]]
+beta_cp = coef(regfit, id = which.min(reg.summary$cp))
+test_cp = sum((test[,1]-as.matrix(Cp_X)%*%as.matrix(beta_cp))^2)
+test_cp
+
+# As for BIC
+BIC_X <- x_test[,which.var[which.min(reg.summary$bic),]]
+beta_bic = coef(regfit, id = which.min(reg.summary$bic))
+test_bic = sum((test[,1]-as.matrix(BIC_X)%*%as.matrix(beta_bic))^2)
+test_bic
+
+```
+
+
+    (d) Repeat (c), using forward stepwise selection and also using backwards stepwise selection. Report the best coefficients and calculate their test errors. How does your answer compare to the results in (c)?
+```{r}
+# Using forward stepwise selection
+reg_forward = regsubsets(Y ~ ., data = train, nvmax = 10, method = "forward")
+reg_forward.summary = summary(reg_forward)
+which.var = reg_forward.summary$which
+
+# As for Adjusted R^2
+which.max(reg_forward.summary$adjr2)
+coef(reg_forward, 9)
+
+adjr2_x <- x_test[,which.var[which.max(reg_forward.summary$adjr2),]]
+beta_adjr2_1 = coef(reg_forward, id = which.max(reg_forward.summary$adjr2))
+test_adjr2_1 = sum((test[,1]-as.matrix(adjr2_x)%*%as.matrix(beta_adjr2_1))^2)
+test_adjr2_1
+
+
+# As for Cp
+which.min(reg_forward.summary$cp)
+coef(reg_forward, 3)
+cp_x <- x_test[,which.var[which.min(reg_forward.summary$cp),]]
+beta_cp = coef(reg_forward, id = which.min(reg_forward.summary$cp))
+test_cp_1 = sum((test[,1]-as.matrix(cp_x)%*%as.matrix(beta_cp))^2)
+test_cp_1
+
+# As for BIC
+which.min(reg_forward.summary$bic)
+coef(reg_forward, 3)
+bic_x <- x_test[,which.var[which.min(reg_forward.summary$bic),]]
+beta_bic = coef(reg_forward, id = which.min(reg_forward.summary$bic))
+test_bic_1 = sum((test[,1]-as.matrix(bic_x)%*%as.matrix(beta_bic))^2)
+test_bic_1
+
+# In conclusion, compared to the results in (C), in the forward stepwise selection, it chooses 9 variables for the adjusted R^2, which are X1, X2, X3, X4, X5, X6, X7, X9, X10 respectively. However, in the result in (C), it chooses also 9 variables for the adjusted R^2, which are X1, X2, X3, X5, X6, X7, X9, X10. (one without X8 and the other one without X4). Thus, they provide the different test error results, which are 129.1248 and 124.2781 respectively. As for Cp and BIC,the two methods gieves the same result, all give 3 same variables and same test error.
+
+
+# Using backward stepwise selection
+reg_back <- regsubsets(Y ~ ., data = train, nvmax = 10, method = "backward")
+reg_back.summary <- summary(reg_back)
+which.var = reg_back.summary$which
+
+# As for Adjusted R^2
+which.max(reg_back.summary$adjr2)
+coef(reg_back, 9)
+
+adjr2_x_2 <- x_test[,which.var[which.max(reg_back.summary$adjr2),]]
+beta_adjr2_2 = coef(reg_back, id = which.max(reg_back.summary$adjr2))
+test_adjr2_2 = sum((test[,1]-as.matrix(adjr2_x_2)%*%as.matrix(beta_adjr2_2))^2)
+test_adjr2_2
+
+# As for Cp
+which.min(reg_back.summary$cp)
+coef(reg_back, 5)
+
+cp_x_2 <- x_test[,which.var[which.min(reg_back.summary$cp),]]
+beta_cp_2 = coef(reg_back, id = which.min(reg_back.summary$cp))
+test_cp_2 = sum((test[,1]-as.matrix(cp_x_2)%*%as.matrix(beta_cp_2))^2)
+test_cp_2
+
+# for BIC
+which.min(reg_back.summary$bic)
+coef(reg_back, 4)
+
+bic_x_2 <- x_test[,which.var[which.min(reg_back.summary$bic),]]
+beta_bic_2 = coef(reg_back, id = which.min(reg_back.summary$bic))
+test_bic_2 = sum((test[,1]-as.matrix(bic_x_2)%*%as.matrix(beta_bic_2))^2)
+test_bic_2
+
+# As for backward stepwise selection, it gives the same results for adjusted R^2, but for Cp, backward stepwise selection gives 5 variables and regsubset give 3 varibales. As for BIC, they are also different, backward stepwise selection gices 4 variables model and regsubset give 3 variables model. Bosth BIC and Cp give larger test errors than that of regsubset.
+```
+    (e) Now fit a LASSO model with `glmnet` function from `glmnet` package to the simulated data, again using $(X,X^2,\cdots,X^{10})$ as predictors. Use cross-validation to select the optimal value of $\lambda$. Create plots of the cross-validation error as a function of $\lambda$. Report the resulting coefficient estimates, and discuss the results obtained.
+```{r}
+cv_lasso =  cv.glmnet(x_train, y_train, alpha =1)
+plot(cv_lasso)
+best_lamda = cv_lasso$lambda.min
+best_lamda
+
+lasso = glmnet(x_train, y_train, alpha =1, lambda = best_lamda)
+pred_lasso = predict(lasso, s = best_lamda, newx = x_test)
+testerr_lasso = sum((y_test-pred_lasso)^2)
+testerr_lasso
+
+coef = predict(lasso ,type = "coefficients", s= best_lamda)[1:length(lasso$beta),]
+coef[coef!=0]
+
+# The test error of the lasso model fit with a lambda chosen by cross-validation is lower than the test error of best subset selection, the forward stepwise selection test error, and backward stepwise selection test error.
+```
+    (f) Now generate a response vector $Y$ according to the model $$Y = \beta_0 + \beta_6 X^6 + \epsilon,$$ where $\beta_6 = 7$, and perform best subset selection and the LASSO. Discuss the results carefully. 
+```{r}
+y = 4 + 7*X^6 + noise
+data_2 = data.frame(y = y, x = data_all[,-1])
+
+regfit2 = regsubsets(y ~ ., data = data_2, nvmax = 10)
+regfit2_summary = summary(regfit2)
+
+library(glmnet)
+x0 = model.matrix(y ~ ., data = data_2)
+y0 = data_2$y
+
+which.var = regfit2_summary$which
+# As for Adjusted R^2
+which.max(regfit2_summary$adjr2)
+coef(regfit2, 4)
+adjr2_x_3 = x0[,which.var[which.max(regfit2_summary$adjr2),]]
+beta_adjr2_3 = coef(regfit2, id = which.max(regfit2_summary$adjr2))
+test_adjr2_3 = sum((data_2[,1]-as.matrix(adjr2_x_3)%*%as.matrix(beta_adjr2_3))^2)
+test_adjr2_3
+
+# As for Cp
+which.min(regfit2_summary$cp)
+coef(regfit2, 4)
+cp_x_3 = x0[,which.var[which.min(regfit2_summary$cp),]]
+beta_cp_3 = coef(regfit2, id = which.min(regfit2_summary$cp))
+test_cp_3 = sum((data_2[,1]-as.matrix(cp_x_3)%*%as.matrix(beta_cp_3))^2)
+test_cp_3
+
+# As for BIC
+which.min(regfit2_summary$bic)
+coef(regfit2, 1)
+bic_x_3 = x0[,which.var[which.min(regfit2_summary$bic),]]
+beta_bic_3 = coef(regfit2, id = which.min(regfit2_summary$bic))
+test_bic_3 = sum((data_2[,1]-as.matrix(bic_x_3)%*%as.matrix(beta_bic_3))^2)
+test_bic_3
+
+# As for lasso
+cv_lasso = cv.glmnet(x0, y0, alpha =1)
+plot(cv_lasso)
+best_lam =cv_lasso$lambda.min
+best_lam
+
+lasso1 = glmnet(x0, y0, alpha =1, lambda = best_lam)
+pred_lasso_1 = predict(lasso1, s= best_lam, newx = x0)
+coef1 = predict(lasso1 ,type = "coefficients", s= best_lamda)[1:11,]
+coef1[coef1!=0]
+
+# According to the results, adjusted R^2 and Cp give the same test error and BIC gives a larger test error.
+```
+2. (Prediction, *25 pt*) In this exercise, we will predict the crime rate using the other variables in the `Boston` data set from `MASS` package.
+
+    (a) Randomly split the data set into a training set and a test set (1:1).
+```{r}
+library(MASS)
+head(Boston)
+dt = sample(1:nrow(Boston), size = 0.5 * nrow(Boston))
+train = Boston[dt,]
+test = Boston[-dt,]
+```
+    (b) Fit a linear model using least squares on the training set, and report the test error obtained.
+```{r}  
+library(caret)
+model = lm(crim ~., data = train)
+pred = predict(model, newdata = test)
+test_error = mean((test$crim - pred)^2)
+test_error
+```
+    (c) Fit a ridge regression model on the training set, with $\lambda$ chosen by 5-fold cross-validation. Report the test error obtained.
+```{r}   
+library(glmnet)
+
+x_train = model.matrix(crim ~., train)[,-1]
+y_train = train$crim
+x_test = model.matrix(crim ~., test)[,-1]
+y_test = test$crim
+set.seed(1)
+f5.cv = cv.glmnet(x_train, y_train, alpha = 0, nfolds = 5)
+best_lamda = f5.cv$lambda.min
+best_lamda
+
+# fit into ridge regression model
+ridge = glmnet(x_train, y_train, alpha = 0, lambda = best_lamda)
+pred_ridge = predict(ridge, s = best_lamda, newx = x_test)
+testerr_ridge = mean((y_test - pred_ridge)^2)
+testerr_ridge
+```
+    (d) Fit a LASSO model on the training set, with $\lambda$ chosen by 5-fold cross-validation. Report the test error obtained, along with the number of non-zero coefficient estimates.
+```{r}    
+set.seed(1)
+f5_cv_1 = cv.glmnet(x_train, y_train, alpha = 1, nfolds = 5)
+
+best_l = f5_cv_1$lambda.min
+best_l
+
+#Report the test error obtained
+lasso = glmnet(x_train,y_train, alpha =1, lambda = best_l)
+pred_lasso = predict(lasso, s = best_l, newx=x_test)
+testerr_lasso = mean((y_test - pred_lasso)^2)
+testerr_lasso
+
+# along with the number of non-zero coefficient estimates.
+coef = predict(lasso,type = "coefficients", s = best_l)[1:length(lasso$beta),]
+coef[coef!=0]
+
+```
+    (e) Fit a PCR model on the training set, with $M$ chosen by 5-fold cross-validation. Report the test error obtained, along with the value of $M$ selected by cross-validation.
+```{r}   
+library(pls)
+set.seed(1)
+pcr = pcr(crim ~., data = train, scale = T, validation = "CV", nfolds = 5)
+summary(pcr)
+
+set.seed(1)
+pcr =  pcr(crim ~., data = train, scale = T, validation = "CV")
+pcr_pred =  predict(pcr, newx = x_test, ncomp = 13)
+pcr_error = mean((pcr_pred - y_test)^2)
+pcr_error
+```
+    (f) Comment on the results obtained. How accurately can we predict the number of crimes? Is there much difference among the test errors resulting from these four approaches?
+    
+ According to the results we get from the previous part, we can find out that the LASSO regression has the smallest test errors, so that it can predict the most accurately.    
+    
